@@ -48,3 +48,19 @@ If `npm run migrate` fails while adding the unique phone index, the selected dat
 1. In Neon, create a new project and use its default empty branch/database. Do not import a dump or run `seed.sql` if you want no test members.
 2. In the Neon Console, open **Connect**, select the branch, database, and role, then copy the connection string. The pooled connection is selected by default; Neon documents the pooled hostname with `-pooler` and the URL with SSL parameters. Use that full string as the backend `DATABASE_URL` secret. Do not paste it into frontend settings or commit it to source control.
 3. Keep `DATABASE_SSL=true` in the backend environment for a Neon connection. Run the backend migration and one-time admin creation commands from the clean-deployment steps above.
+
+### Deploy both services on Vercel
+
+The repository-root `vercel.json` routes `/api/*` to the Express backend and all other paths to the React frontend. In Vercel, import the repository and set **Root Directory** to `.` (the repository root). Do not set a project-wide build command or output directory; those are configured for the frontend service in `vercel.json`.
+
+Add these environment variables to the **backend service** in Vercel for Production:
+
+- `NODE_ENV=production`
+- `DATABASE_URL` = the Neon connection string for a new, empty production database
+- `DATABASE_SSL=true`
+- `SESSION_SECRET` = a long, randomly generated secret
+- `FRONTEND_URL` = the exact HTTPS origin Vercel assigns to the frontend, with no trailing slash
+
+Do not add database credentials or other secrets to the frontend service. The frontend uses the same origin for `/api`, so it does not need `REACT_APP_API_URL` in this setup. Add the same backend variables to Preview only if you intend to deploy previews against a separate safe database.
+
+Before using the app, apply the migrations to the production database once from a trusted local terminal with the backend `.env` configured, using `cd backend` and `npm run migrate`. Then create the first administrator once with `npm run create-admin`; provide `ADMIN_INITIAL_USERNAME` and `ADMIN_INITIAL_PASSWORD` in the local environment for that command, and do not save the initial password in Vercel. Confirm the Vercel build succeeds, then open `/admin/login` on the deployment URL.

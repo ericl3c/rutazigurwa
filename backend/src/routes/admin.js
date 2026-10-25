@@ -65,7 +65,8 @@ router.get('/admin/dashboard', wrap(async (req, res) => {
     (SELECT count(*) FROM family_members WHERE is_active AND gender='female')::int AS active_female,
     (SELECT count(*) FROM draws d WHERE d.round_number=(SELECT round_number FROM lottery_settings WHERE id=1))::int AS drawn,
     (SELECT count(*) FROM family_members m WHERE m.is_active AND NOT EXISTS (SELECT 1 FROM draws d WHERE d.participant_id=m.id AND d.round_number=(SELECT round_number FROM lottery_settings WHERE id=1)))::int AS not_drawn,
-    (SELECT status FROM lottery_settings WHERE id=1) AS lottery_status, (SELECT round_number FROM lottery_settings WHERE id=1) AS round_number`);
+    COALESCE((SELECT status FROM lottery_settings WHERE id=1), 'not_started') AS lottery_status,
+    COALESCE((SELECT round_number FROM lottery_settings WHERE id=1), 1) AS round_number`);
   res.json({ ...r.rows[0], completed_assignments: r.rows[0].drawn });
 }));
 
@@ -138,6 +139,7 @@ router.get('/admin/draws', wrap(async (req, res) => {
 }));
 
 router.get('/admin/settings', wrap(async (req, res) => {
+  await pool.query('INSERT INTO lottery_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING');
   const s = (await pool.query('SELECT * FROM lottery_settings WHERE id=1')).rows[0];
   const c = (await pool.query(`SELECT count(*) FILTER (WHERE gender='male')::int males, count(*) FILTER (WHERE gender='female')::int females FROM family_members WHERE is_active`)).rows[0];
   res.json({ ...s, active_male: c.males, active_female: c.females, counts_match: c.males === c.females });
@@ -145,6 +147,7 @@ router.get('/admin/settings', wrap(async (req, res) => {
 // Actions: set_mode, approve_mismatch, start, pause, resume, close
 router.patch('/admin/settings', wrap(async (req, res) => {
   const { action, matching_mode } = req.body || {};
+  await pool.query('INSERT INTO lottery_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING');
   const client = await pool.connect();
   try {
     await client.query('BEGIN');

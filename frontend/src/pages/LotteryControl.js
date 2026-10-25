@@ -19,13 +19,17 @@ export default function LotteryControl() {
   }
   if (!s) return err ? <Alert>{err}</Alert> : <Spinner />;
   const pre = s.status === 'not_started'; const oneToOne = s.matching_mode === 'one_to_one';
+  const hasBothGenders = s.active_male > 0 && s.active_female > 0;
+  const mismatchNeedsApproval = oneToOne && !s.counts_match;
+  const canStart = hasBothGenders && (!mismatchNeedsApproval || s.mismatch_approved);
   return (
     <>
       <h1>Lottery control</h1>
       <div className="card">
-        <p>Status: <span className={`status ${s.status}`}>{s.status.replace('_', ' ')}</span></p>
+        <p>Status: <span className={`status ${s.status || 'not_started'}`}>{(s.status || 'not_started').replace('_', ' ')}</span></p>
         <p>Round: <strong>{s.round_number || 1}</strong></p>
         <p>Active males: <strong>{s.active_male}</strong> &nbsp; Active females: <strong>{s.active_female}</strong></p>
+        {pre && !hasBothGenders && <div className="alert warn">Add at least one active male and one active female member before starting the lottery.</div>}
         {s.started_at && <p className="muted">Started: {fmtDate(s.started_at)}</p>}
         {s.closed_at && <p className="muted">Closed: {fmtDate(s.closed_at)}</p>}
         <Alert>{err}</Alert>
@@ -45,7 +49,7 @@ export default function LotteryControl() {
         </>)}
 
         <div className="row gap">
-          {pre && <button className="btn primary" disabled={busy} onClick={() => setAsk('start')}>Start lottery</button>}
+          {pre && <button className="btn primary" disabled={busy || !canStart} onClick={() => setAsk('start')}>Start lottery</button>}
           {s.status === 'open' && <button className="btn" disabled={busy} onClick={() => setAsk('pause')}>Pause</button>}
           {s.status === 'paused' && <button className="btn primary" disabled={busy} onClick={() => setAsk('resume')}>Resume</button>}
           {s.status === 'closed' && <button className="btn primary" disabled={busy} onClick={() => setAsk('new_round')}>Prepare new round</button>}

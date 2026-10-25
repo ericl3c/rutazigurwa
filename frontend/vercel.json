@@ -1,0 +1,5 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "node ./node_modules/react-scripts/bin/react-scripts.js build",
+  "outputDirectory": "build"
+}

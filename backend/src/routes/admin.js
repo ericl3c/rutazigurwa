@@ -28,6 +28,36 @@ router.post('/admin/logout', (req, res, next) => req.session.destroy((e) => (e ?
 
 router.use('/admin', requireAdmin);
 
+router.get('/admin/account', wrap(async (req, res) => {
+  const r = await pool.query('SELECT username FROM admins WHERE id=$1', [req.session.adminId]);
+  if (!r.rows[0]) throw new AppError(404, 'NOT_FOUND', 'Administrator account not found.');
+  res.json(r.rows[0]);
+}));
+router.patch('/admin/account', wrap(async (req, res) => {
+  const { username, current_password, new_password } = req.body || {};
+  const name = typeof username === 'string' ? username.trim() : '';
+  if (!name || name.length > 50) throw new AppError(400, 'VALIDATION', 'Username is required (max 50 characters).');
+  if (typeof current_password !== 'string' || !current_password || current_password.length > 200)
+    throw new AppError(400, 'VALIDATION', 'Enter your current password to confirm this change.');
+  if (typeof new_password !== 'string' || new_password.length < 8 || new_password.length > 200)
+    throw new AppError(400, 'VALIDATION', 'New password must be between 8 and 200 characters.');
+
+  const account = (await pool.query('SELECT password_hash FROM admins WHERE id=$1', [req.session.adminId])).rows[0];
+  if (!account) throw new AppError(404, 'NOT_FOUND', 'Administrator account not found.');
+  if (!(await bcrypt.compare(current_password, account.password_hash)))
+    throw new AppError(400, 'INVALID_PASSWORD', 'Current password is incorrect.');
+  const passwordHash = await bcrypt.hash(new_password, 10);
+  let updated;
+  try {
+    updated = await pool.query('UPDATE admins SET username=$1, password_hash=$2 WHERE id=$3 RETURNING id, username', [name, passwordHash, req.session.adminId]);
+  } catch (e) {
+    if (e.code === '23505') throw new AppError(409, 'USERNAME_TAKEN', 'That username is already in use.');
+    throw e;
+  }
+  await audit(req.session.adminId, 'admin_credentials_updated', 'admin', req.session.adminId);
+  res.json(updated.rows[0]);
+}));
+
 router.get('/admin/dashboard', wrap(async (req, res) => {
   const r = await pool.query(`SELECT
     (SELECT count(*) FROM family_members)::int AS total_members,
@@ -60,9 +90,16 @@ function validateMember(b, partial) {
   if (b.phone_number !== undefined) { const p = b.phone_number === null ? '' : String(b.phone_number).trim(); if (p && !/^\+?[0-9 ()-]{6,30}$/.test(p)) throw new AppError(400, 'VALIDATION', 'Phone number looks invalid.'); out.phone_number = p || null; }
   return out;
 }
+function handlePhoneConflict(e) {
+  if (e.code === '23505' && e.constraint === 'idx_family_members_phone_digits_unique')
+    throw new AppError(409, 'PHONE_IN_USE', 'This phone number is already registered.');
+  throw e;
+}
 router.post('/admin/members', wrap(async (req, res) => {
   const m = validateMember(req.body || {}, false);
-  const r = await pool.query('INSERT INTO family_members (full_name, gender, phone_number) VALUES ($1,$2,$3) RETURNING *', [m.full_name, m.gender, m.phone_number || null]);
+  let r;
+  try { r = await pool.query('INSERT INTO family_members (full_name, gender, phone_number) VALUES ($1,$2,$3) RETURNING *', [m.full_name, m.gender, m.phone_number || null]); }
+  catch (e) { handlePhoneConflict(e); }
   await audit(req.session.adminId, 'member_created', 'family_member', r.rows[0].id);
   res.status(201).json(r.rows[0]);
 }));
@@ -81,11 +118,10 @@ router.patch('/admin/members/:id(\\d+)/status', wrap(async (req, res) => {
 router.patch('/admin/members/:id(\\d+)', wrap(async (req, res) => {
   const m = validateMember(req.body || {}, true); const keys = Object.keys(m);
   if (!keys.length) throw new AppError(400, 'VALIDATION', 'Nothing to update.');
-  if (m.gender) {
-    const used = await pool.query('SELECT 1 FROM draws WHERE participant_id=$1 OR assigned_member_id=$1', [req.params.id]);
-    if (used.rowCount) throw new AppError(409, 'LOCKED', 'Gender cannot be changed after the member is part of a draw.');
-  }
-  const r = await pool.query(`UPDATE family_members SET ${keys.map((k, i) => `${k}=$${i + 1}`).join(',')} WHERE id=$${keys.length + 1} RETURNING *`, [...keys.map((k) => m[k]), req.params.id]);
+
+  let r;
+  try { r = await pool.query(`UPDATE family_members SET ${keys.map((k, i) => `${k}=$${i + 1}`).join(',')} WHERE id=$${keys.length + 1} RETURNING *`, [...keys.map((k) => m[k]), req.params.id]); }
+  catch (e) { handlePhoneConflict(e); }
   if (!r.rows[0]) throw new AppError(404, 'NOT_FOUND', 'Member not found.');
   await audit(req.session.adminId, 'member_updated', 'family_member', r.rows[0].id);
   res.json(r.rows[0]);
@@ -96,8 +132,8 @@ router.get('/admin/draws', wrap(async (req, res) => {
   if (req.query.q) { v.push(`%${String(req.query.q).slice(0, 100)}%`); where = `WHERE p.full_name ILIKE $1 OR p.member_code ILIKE $1 OR a.full_name ILIKE $1 OR a.member_code ILIKE $1`; }
   const base = `FROM draws d JOIN family_members p ON p.id=d.participant_id JOIN family_members a ON a.id=d.assigned_member_id ${where}`;
   const total = (await pool.query(`SELECT count(*)::int c ${base}`, v)).rows[0].c;
-  const rows = (await pool.query(`SELECT d.id, d.round_number, p.member_code AS participant_code, p.full_name AS participant_name, p.gender AS participant_gender,
-    a.member_code AS assigned_code, a.full_name AS assigned_name, d.drawn_at ${base} ORDER BY d.drawn_at DESC LIMIT ${limit} OFFSET ${offset}`, v)).rows;
+  const rows = (await pool.query(`SELECT d.id, d.round_number, p.member_code AS participant_code, p.full_name AS participant_name, p.gender AS participant_gender, p.phone_number AS participant_phone,
+    a.member_code AS assigned_code, a.full_name AS assigned_name, a.phone_number AS assigned_phone, d.drawn_at ${base} ORDER BY d.drawn_at DESC LIMIT ${limit} OFFSET ${offset}`, v)).rows;
   res.json({ data: rows, page: pg, limit, total });
 }));
 
@@ -160,7 +196,7 @@ router.get('/admin/export', wrap(async (req, res) => {
   const type = req.query.type === 'results' ? 'results' : 'members';
   const q = type === 'members'
     ? 'SELECT member_code, full_name, gender, phone_number, is_active, created_at FROM family_members ORDER BY id'
-    : `SELECT d.round_number, p.member_code AS participant_code, p.full_name AS participant_name, p.gender AS participant_gender, a.member_code AS assigned_code, a.full_name AS assigned_name, d.drawn_at
+    : `SELECT d.round_number, p.member_code AS participant_code, p.full_name AS participant_name, p.gender AS participant_gender, p.phone_number AS participant_phone, a.member_code AS assigned_code, a.full_name AS assigned_name, a.phone_number AS assigned_phone, d.drawn_at
        FROM draws d JOIN family_members p ON p.id=d.participant_id JOIN family_members a ON a.id=d.assigned_member_id ORDER BY d.drawn_at`;
   const r = await pool.query(q);
   const head = r.fields.map((f) => f.name).join(',');

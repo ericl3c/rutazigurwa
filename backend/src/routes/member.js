@@ -10,6 +10,30 @@ const loginLimiter = rateLimit({ skip: () => process.env.NODE_ENV === 'test' && 
 const drawLimiter = rateLimit({ skip: () => process.env.NODE_ENV === 'test' && !process.env.TEST_RATE_LIMIT, windowMs: 60 * 1000, limit: 10, handler: (req, res, next) => next(new AppError(429, 'RATE_LIMITED', 'Too many requests.')) });
 const CODE_RE = /^RUT-\d{3,6}$/;
 const getLotteryState = async () => (await pool.query('SELECT status, round_number FROM lottery_settings WHERE id=1')).rows[0];
+const registerLimiter = rateLimit({ skip: () => process.env.NODE_ENV === 'test' && !process.env.TEST_RATE_LIMIT, windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false,
+  handler: (req, res, next) => next(new AppError(429, 'RATE_LIMITED', 'Too many registration attempts. Please wait and try again.')) });
+const insertPhoneConflict = (e) => {
+  if (e.code === '23505' && e.constraint === 'idx_family_members_phone_digits_unique')
+    throw new AppError(409, 'PHONE_IN_USE', 'This phone number is already registered.');
+  throw e;
+};
+
+router.post('/member/register', registerLimiter, wrap(async (req, res) => {
+  const body = req.body || {};
+  const fullName = String(body.full_name || '').trim();
+  const gender = body.gender;
+  const phone = body.phone_number == null ? '' : String(body.phone_number).trim();
+  if (!fullName || fullName.length > 100) throw new AppError(400, 'VALIDATION', 'Full name is required (max 100 characters).');
+  if (!['male', 'female'].includes(gender)) throw new AppError(400, 'VALIDATION', 'Gender must be male or female.');
+  if (phone && !/^\+?[0-9 ()-]{6,30}$/.test(phone)) throw new AppError(400, 'VALIDATION', 'Phone number looks invalid.');
+  let result;
+  try {
+    result = await pool.query(
+      'INSERT INTO family_members (full_name, gender, phone_number) VALUES ($1,$2,$3) RETURNING id, member_code, full_name',
+      [fullName, gender, phone || null]);
+  } catch (e) { insertPhoneConflict(e); }
+  res.status(201).json(result.rows[0]);
+}));
 
 router.post('/member/login', loginLimiter, wrap(async (req, res) => {
   const code = String((req.body || {}).member_code || '').trim().toUpperCase();

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Dices, ListChecks, ScrollText, LogOut, Menu } from 'lucide-react';
+import { LayoutDashboard, Users, Dices, ListChecks, ScrollText, LogOut, Menu, UserRoundCog } from 'lucide-react';
 import { api } from '../api';
 import { Spinner } from '../components';
 
@@ -21,6 +21,7 @@ export default function AdminLayout() {
           <L to="/admin/lottery" icon={Dices}>Lottery</L>
           <L to="/admin/results" icon={ListChecks}>Results</L>
           <L to="/admin/audit" icon={ScrollText}>Audit log</L>
+          <L to="/admin/account" icon={UserRoundCog}>Account</L>
         </nav>
         <button className="btn link light" onClick={logout}><LogOut size={16} /> Log out</button>
       </aside>

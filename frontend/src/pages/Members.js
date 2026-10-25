@@ -22,7 +22,7 @@ export default function Members() {
   async function save() {
     setFe('');
     try {
-      if (form.id) { await api.patch('/admin/members/' + form.id, { full_name: form.full_name, phone_number: form.phone_number, ...(form.has_drawn ? {} : { gender: form.gender }) }); setForm(null); }
+      if (form.id) { await api.patch('/admin/members/' + form.id, { full_name: form.full_name, gender: form.gender, phone_number: form.phone_number }); setForm(null); }
       else { const m = await api.post('/admin/members', form); setForm(null); setCreated(m); }
       load();
     } catch (e) { setFe(e.message); }
@@ -95,8 +95,8 @@ export default function Members() {
           actions={<><button className="btn" onClick={() => setForm(null)}>Cancel</button><button className="btn primary" onClick={save}>Save</button></>}>
           <label>Full name</label><input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} maxLength={100} />
           <label>Gender</label>
-          <select value={form.gender} disabled={form.has_drawn} onChange={(e) => setForm({ ...form, gender: e.target.value })}><option value="male">Male</option><option value="female">Female</option></select>
-          {form.has_drawn && <p className="muted">Gender is locked because this member already drew.</p>}
+          <select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}><option value="male">Male</option><option value="female">Female</option></select>
+          {form.has_drawn && <p className="muted">Changing gender will also change how this member is shown in previous results.</p>}
           <label>Phone number (optional)</label><input value={form.phone_number} onChange={(e) => setForm({ ...form, phone_number: e.target.value })} inputMode="tel" />
           <Alert>{fe}</Alert>
         </Modal>

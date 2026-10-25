@@ -26,7 +26,6 @@ Admin can instead choose "open" mode (the same person may be drawn by several pe
 
 ## Frontend (local)
 `cd frontend && cp .env.example .env && npm install && npm start` (opens on http://localhost:3000).
-Set REACT_APP_API_URL to your API address. Member page is `/`, administrator login is `/admin/login`.
-Build for hosting: `npm run build` (`public/_redirects` keeps page refreshes working on Netlify-style hosts).
-In production, set the API's FRONTEND_URL to the exact site address and use HTTPS on both
-(session cookies are Secure + SameSite=None there).
+Set REACT_APP_API_URL to your API address when the frontend and API are hosted on different origins. If they share an origin behind a reverse proxy, the frontend uses that origin automatically. The member page is `/`, administrator login is `/admin/login`, and the lottery page is `/lottery`.
+Build for hosting: `npm run build` (`public/_redirects` keeps page refreshes working on Netlify-style hosts). Configure the hosting provider to serve the SPA fallback for unknown paths so direct visits and refreshes on `/admin/login` and `/lottery` load the app.
+In production, set the API's FRONTEND_URL to the exact frontend origin and use HTTPS. Session cookies are Secure + SameSite=None there. For separately hosted frontend and API, set REACT_APP_API_URL to the public API origin at build time.

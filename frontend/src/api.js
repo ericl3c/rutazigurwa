@@ -1,4 +1,4 @@
-const BASE = process.env.REACT_APP_API_URL || 'http://localhost:4000';
+const BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:4000' : window.location.origin);
 const HEADERS = { 'Content-Type': 'application/json', 'X-Requested-With': 'family-lottery' };
 
 export class ApiError extends Error {

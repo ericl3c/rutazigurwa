@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PartyPopper } from 'lucide-react';
 import { api } from '../api';
@@ -14,7 +14,8 @@ const STATUS_TEXT = {
 export default function MemberLottery() {
   const nav = useNavigate();
   const [me, setMe] = useState(null); const [result, setResult] = useState(null);
-  const [confirm, setConfirm] = useState(false); const [drawing, setDrawing] = useState(false); const [err, setErr] = useState('');
+  const [confirm, setConfirm] = useState(false); const [drawing, setDrawing] = useState(false); const [wheelSpinning, setWheelSpinning] = useState(false); const [err, setErr] = useState('');
+  const [wheelRotation, setWheelRotation] = useState(0); const rotationRef = useRef(0);
 
   const load = useCallback(async () => {
     try {
@@ -25,11 +26,20 @@ export default function MemberLottery() {
   useEffect(() => { load(); }, [load]);
 
   async function draw() {
-    setConfirm(false); setErr(''); setDrawing(true);
+    setConfirm(false); setErr(''); setDrawing(true); setWheelSpinning(true);
+    rotationRef.current += 360 * 8 + Math.floor(Math.random() * 360);
+    setWheelRotation(rotationRef.current);
+    const drawRequest = api.post('/lottery/draw').then((data) => ({ data })).catch((error) => ({ error }));
     try {
-      const [r] = await Promise.all([api.post('/lottery/draw'), new Promise((ok) => setTimeout(ok, 1800))]);
-      setResult(r.assigned_name); setMe((m) => ({ ...m, has_drawn: true }));
-    } catch (e) { if (e.status === 401) nav('/'); else { setErr(e.message); load(); } } finally { setDrawing(false); }
+      await new Promise((resolve) => setTimeout(() => { setWheelSpinning(false); resolve(); }, 5000));
+      const { data, error } = await drawRequest;
+      if (error) {
+        if (error.status === 401) nav('/');
+        else { setErr(error.message); await load(); }
+      } else {
+        setResult(data.assigned_name); setMe((m) => ({ ...m, has_drawn: true }));
+      }
+    } finally { setDrawing(false); setWheelSpinning(false); }
   }
   async function logout() { try { await api.post('/member/logout'); } catch {} nav('/'); }
 
@@ -42,27 +52,38 @@ export default function MemberLottery() {
         <h1>Welcome, {me.name}!</h1>
         <p className="muted">Member ID: <strong>{me.member_code}</strong> &nbsp; Round: <strong>{me.lottery_round || 1}</strong></p>
 
-        {drawing && <div className="drawing"><div className="spinner big" /><p>Drawing your family member...</p></div>}
-
-        {!drawing && result && (
-          <div className="result" aria-live="polite">
-            <PartyPopper size={44} color="#d4a017" />
-            <h2>Congratulations, {me.name}!</h2>
-            <p>You have drawn</p>
-            <div className="drawn-name">{result}</div>
-            <p className="muted">Your lottery has been completed successfully. You cannot draw again.</p>
+        <p>Welcome to RUTAZIGURWA Members. Are you ready to discover your assigned family member?</p>
+        <section className="tombora-section" aria-busy={drawing}>
+          <div className="wheel-stage" aria-label="TOMBORA roulette wheel">
+            <div className="wheel-pointer" aria-hidden="true" />
+            <div className="wheel-rim">
+              <div className="wheel-disc" style={{ transform: `rotate(${wheelRotation}deg)` }}>
+              </div>
+              <div className="wheel-center"><span>RUTAZIGURWA</span><strong>TOMBORA</strong></div>
+            </div>
           </div>
-        )}
 
-        {!drawing && !result && (
-          <>
-            <p>Welcome to RUTAZIGURWA Members. Are you ready to discover your assigned family member?</p>
-            <p className={`status ${me.lottery_status}`}>{STATUS_TEXT[me.lottery_status]}</p>
-            <ol className="steps"><li>Press the TOMBORA button.</li><li>Confirm that you are ready.</li><li>Your result appears on the screen.</li></ol>
-            <Alert>{err}</Alert>
-            <button className="btn tombora" disabled={me.lottery_status !== 'open'} onClick={() => setConfirm(true)}>TOMBORA</button>
-          </>
-        )}
+          {drawing && <div className="wheel-loading" role="status"><span className="wheel-loader" aria-hidden="true" /><span>{wheelSpinning ? 'The wheel is spinning...' : 'Finishing your draw...'}</span></div>}
+
+          {!drawing && result && (
+            <div className="winner-card" aria-live="polite">
+              <PartyPopper size={34} color="#d4a017" />
+              <p className="winner-eyebrow">YOUR TOMBORA RESULT</p>
+              <h2>Congratulations, {me.name}!</h2>
+              <div className="drawn-name">{result}</div>
+              <p className="muted">Your result is saved. You cannot draw again this round.</p>
+            </div>
+          )}
+
+          {!drawing && !result && (
+            <>
+              <p className={`status ${me.lottery_status}`}>{STATUS_TEXT[me.lottery_status]}</p>
+              <ol className="steps"><li>Press the TOMBORA button.</li><li>Confirm that you are ready.</li><li>Your result appears on the screen.</li></ol>
+              <Alert>{err}</Alert>
+              <button className="btn tombora" disabled={me.lottery_status !== 'open'} onClick={() => setConfirm(true)}>TOMBORA</button>
+            </>
+          )}
+        </section>
         <button className="btn link" onClick={logout}>Log out</button>
       </div>
       {confirm && (

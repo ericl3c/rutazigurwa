@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Gift } from 'lucide-react';
 import { api } from '../api';
 import { Alert } from '../components';
@@ -22,6 +22,8 @@ export default function MemberLogin() {
         <input id="mid" value={code} onChange={(e) => setCode(e.target.value)} placeholder="RUT-001" autoComplete="off" autoCapitalize="characters" maxLength={20} required />
         <Alert>{err}</Alert>
         <button className="btn primary block" disabled={busy || !code.trim()}>{busy ? 'Checking...' : 'Continue'}</button>
+        <p className="muted">New member? <Link to="/register">join "rutazigurwa member </Link></p>
+        <p className="muted">Administrator? <Link to="/admin/login">Admin login</Link></p>
       </form>
     </main>
   );

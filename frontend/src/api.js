@@ -1,9 +1,9 @@
-
+```javascript
 const BASE = (
   process.env.REACT_APP_API_URL ||
   (process.env.NODE_ENV === "development"
     ? "http://localhost:4000"
-    : "")
+    : "https://rutazigurwa-api.onrender.com")
 ).replace(/\/+$/, "");
 
 const HEADERS = {
@@ -14,6 +14,7 @@ const HEADERS = {
 export class ApiError extends Error {
   constructor(status, code, message) {
     super(message);
+    this.name = "ApiError";
     this.status = status;
     this.code = code;
   }
@@ -22,30 +23,18 @@ export class ApiError extends Error {
 async function request(method, path, body) {
   let res;
 
-  // Use the same storage key that your login code uses.
-  const token =
-    localStorage.getItem("token") ||
-    localStorage.getItem("adminToken") ||
-    localStorage.getItem("authToken");
-
-  const headers = { ...HEADERS };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
   try {
-    res = await fetch(BASE + "/api" + path, {
+    res = await fetch(`${BASE}/api${path}`, {
       method,
-      headers,
+      headers: { ...HEADERS },
       credentials: "include",
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-  } catch {
+  } catch (error) {
     throw new ApiError(
       0,
       "NETWORK",
-      "Cannot reach the server. Check your internet and try again."
+      "Cannot reach the server. Check your internet connection and try again."
     );
   }
 
@@ -61,8 +50,12 @@ async function request(method, path, body) {
   if (!res.ok) {
     throw new ApiError(
       res.status,
-      data.error?.code,
-      data.error?.message || "Something went wrong."
+      data.error?.code || data.code || "REQUEST_FAILED",
+      data.error?.message ||
+        data.message ||
+        (res.status === 401
+          ? "Administrator login required. Please log in again."
+          : "Something went wrong. Please try again.")
     );
   }
 
@@ -70,11 +63,17 @@ async function request(method, path, body) {
 }
 
 export const api = {
-  get: (p) => request("GET", p),
-  post: (p, b) => request("POST", p, b || {}),
-  patch: (p, b) => request("PATCH", p, b || {}),
-  blob: (p) => request("GET", p),
+  get: (path) => request("GET", path),
+
+  post: (path, body) =>
+    request("POST", path, body === undefined ? {} : body),
+
+  patch: (path, body) =>
+    request("PATCH", path, body === undefined ? {} : body),
+
+  blob: (path) => request("GET", path),
 };
 
-export const fmtDate = (d) =>
-  d ? new Date(d).toLocaleString() : "";
+export const fmtDate = (date) =>
+  date ? new Date(date).toLocaleString() : "";
+```

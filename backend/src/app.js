@@ -36,8 +36,10 @@ const allowedOrigins = [
   .filter(Boolean)
   .map((url) => url.replace(/\/+$/, ""));
 
+// Security headers.
 app.use(helmet());
 
+// CORS configuration.
 app.use(
   cors({
     origin(origin, callback) {
@@ -58,6 +60,7 @@ app.use(
   })
 );
 
+// Parse JSON request bodies.
 app.use(express.json({ limit: "10kb" }));
 
 // Health check.
@@ -68,7 +71,7 @@ app.get("/health", (req, res) => {
   });
 });
 
-// API routes.
+// Member and admin API routes.
 app.use(
   "/api",
   requireCustomHeader,
@@ -121,4 +124,3 @@ app.use((err, req, res, next) => {
 });
 
 module.exports = app;
-```

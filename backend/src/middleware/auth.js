@@ -1,57 +1,53 @@
 
-const jwt = require("jsonwebtoken");
-const pool = require("../db");
-const { AppError } = require("../errors");
+const pool = require('../db');
+const { AppError } = require('../errors');
+const { verifyToken: verifyAccessToken } = require('../services/authToken');
 
-// Verify the JWT sent by the frontend.
+// Verify the bearer token sent by the frontend.
 function verifyToken(req, res, next) {
-  const authorization = req.get("Authorization") || "";
-  const match = /^Bearer ([^\s]+)$/.exec(authorization);
+  const authorization = (req.get('Authorization') || '').trim();
+  const parts = authorization.split(/\s+/);
 
-  if (!match) {
+  if (
+    parts.length !== 2 ||
+    parts[0].toLowerCase() !== 'bearer' ||
+    !parts[1]
+  ) {
     return next(
       new AppError(
         401,
-        "UNAUTHORIZED",
-        "Authentication token required."
+        'UNAUTHORIZED',
+        'Authentication token required.'
       )
     );
   }
 
   try {
-    if (!process.env.JWT_SECRET) {
-      throw new Error("JWT_SECRET is not configured");
+    const admin = verifyAccessToken(parts[1], 'admin');
+    const member = admin
+      ? null
+      : verifyAccessToken(parts[1], 'member');
+
+    const verified = admin
+      ? { ...admin, role: 'admin' }
+      : member
+        ? { ...member, role: 'member' }
+        : null;
+
+    if (!verified || !verified.id) {
+      return next(
+        new AppError(
+          401,
+          'INVALID_TOKEN',
+          'Token is invalid or expired.'
+        )
+      );
     }
 
-    const payload = jwt.verify(match[1], process.env.JWT_SECRET, {
-      algorithms: ["HS256"],
-    });
-
-    if (
-      !payload.sub ||
-      !["admin", "member"].includes(payload.role)
-    ) {
-      throw new Error("Invalid token claims");
-    }
-
-    req.auth = {
-      id: payload.sub,
-      role: payload.role,
-    };
-
+    req.auth = verified;
     return next();
   } catch (error) {
-    if (error.message === "JWT_SECRET is not configured") {
-      return next(error);
-    }
-
-    return next(
-      new AppError(
-        401,
-        "INVALID_TOKEN",
-        "Token is invalid or expired."
-      )
-    );
+    return next(error);
   }
 }
 
@@ -62,12 +58,12 @@ function requireAdmin(req, res, next) {
       return next(err);
     }
 
-    if (req.auth.role !== "admin") {
+    if (req.auth.role !== 'admin') {
       return next(
         new AppError(
           403,
-          "FORBIDDEN",
-          "Administrator access required."
+          'FORBIDDEN',
+          'Administrator access required.'
         )
       );
     }
@@ -84,12 +80,12 @@ function requireMember(req, res, next) {
       return next(err);
     }
 
-    if (req.auth.role !== "member") {
+    if (req.auth.role !== 'member') {
       return next(
         new AppError(
           403,
-          "FORBIDDEN",
-          "Member access required."
+          'FORBIDDEN',
+          'Member access required.'
         )
       );
     }
@@ -106,8 +102,8 @@ function requireMember(req, res, next) {
         return next(
           new AppError(
             401,
-            "UNAUTHORIZED",
-            "Member account is inactive."
+            'UNAUTHORIZED',
+            'Member account is inactive.'
           )
         );
       }
@@ -122,16 +118,16 @@ function requireMember(req, res, next) {
 
 // Require the expected header for non-read-only requests.
 function requireCustomHeader(req, res, next) {
-  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
     return next();
   }
 
-  if (req.get("X-Requested-With") === "family-lottery") {
+  if (req.get('X-Requested-With') === 'family-lottery') {
     return next();
   }
 
   return next(
-    new AppError(403, "FORBIDDEN", "Invalid request.")
+    new AppError(403, 'FORBIDDEN', 'Invalid request.')
   );
 }
 

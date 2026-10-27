@@ -10,8 +10,10 @@ const { requireCustomHeader } = require("./middleware/auth");
 const app = express();
 const prod = process.env.NODE_ENV === "production";
 
-// Configure Render's reverse proxy before registering middleware.
-app.set("trust proxy", prod ? 1 : false);
+// Configure Render's reverse proxy.
+if (prod) {
+  app.set("trust proxy", 1);
+}
 
 console.log("Express trust proxy:", app.get("trust proxy"));
 console.log("NODE_ENV:", process.env.NODE_ENV);
@@ -89,7 +91,7 @@ app.use((req, res) => {
   });
 });
 
-// Central error handler.
+// Centralized error handler.
 app.use((err, req, res, next) => {
   if (res.headersSent) {
     return next(err);

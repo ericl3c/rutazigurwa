@@ -1,23 +1,26 @@
 
 const jwt = require('jsonwebtoken');
-cons
-t pool = require('../db');
+const pool = require('../db');
 const { AppError } = require('../errors');
 
+// Verify the JWT sent by the frontend.
 function verifyToken(req, res, next) {
-  const header = req.headers.authorization;
+  const authorization = req.get('Authorization') || '';
+  const match = /^Bearer ([^\s]+)$/.exec(authorization);
 
-  if (!header || !header.startsWith('Bearer ')) {
+  if (!match) {
     return next(
       new AppError(401, 'UNAUTHORIZED', 'Authentication token required.')
     );
   }
 
-  const token = header.slice(7).trim();
-
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET, {
-      algorithms: ['HS256']
+    if (!process.env.JWT_SECRET) {
+      throw new Error('JWT_SECRET is not configured');
+    }
+
+    const payload = jwt.verify(match[1], process.env.JWT_SECRET, {
+      algorithms: ['HS256'],
     });
 
     if (
@@ -29,19 +32,24 @@ function verifyToken(req, res, next) {
 
     req.auth = {
       id: payload.sub,
-      role: payload.role
+      role: payload.role,
     };
 
-    next();
+    return next();
   } catch (error) {
-    next(
+    if (error.message === 'JWT_SECRET is not configured') {
+      return next(error);
+    }
+
+    return next(
       new AppError(401, 'INVALID_TOKEN', 'Token is invalid or expired.')
     );
   }
 }
 
+// Allow administrators only.
 function requireAdmin(req, res, next) {
-  verifyToken(req, res, (err) => {
+  return verifyToken(req, res, (err) => {
     if (err) return next(err);
 
     if (req.auth.role !== 'admin') {
@@ -50,12 +58,14 @@ function requireAdmin(req, res, next) {
       );
     }
 
-    next();
+    req.adminId = req.auth.id;
+    return next();
   });
 }
 
-async function requireMember(req, res, next) {
-  verifyToken(req, res, async (err) => {
+// Allow active members only.
+function requireMember(req, res, next) {
+  return verifyToken(req, res, async (err) => {
     if (err) return next(err);
 
     if (req.auth.role !== 'member') {
@@ -65,9 +75,10 @@ async function requireMember(req, res, next) {
     }
 
     try {
-      // Recheck the database so a deactivated member loses access.
       const result = await pool.query(
-        'SELECT id FROM family_members WHERE id = $1 AND is_active = true',
+        `SELECT id, member_code, full_name, gender, is_active
+         FROM family_members
+         WHERE id = $1 AND is_active = true`,
         [req.auth.id]
       );
 
@@ -78,53 +89,31 @@ async function requireMember(req, res, next) {
       }
 
       req.member = result.rows[0];
-      next();
+      return next();
     } catch (error) {
-      next(error);
+      return next(error);
     }
   });
+}
+
+// Require the expected header for non-read-only requests.
+function requireCustomHeader(req, res, next) {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    return next();
+  }
+
+  if (req.get('X-Requested-With') === 'family-lottery') {
+    return next();
+  }
+
+  return next(
+    new AppError(403, 'FORBIDDEN', 'Invalid request.')
+  );
 }
 
 module.exports = {
   verifyToken,
   requireAdmin,
-  requireMember
+  requireMember,
+  requireCustomHeader,
 };
-=======
-const { AppError } = require('../errors');
-const pool = require('../db');
-const { verifyToken } = require('../services/authToken');
-
-function bearerClaims(req, role) {
-  const authorization = req.get('Authorization') || '';
-  const match = /^Bearer ([^\s]+)$/.exec(authorization);
-  return match ? verifyToken(match[1], role) : null;
-}
-
-function requireAdmin(req, res, next) {
-  const claims = bearerClaims(req, 'admin');
-  if (!claims) {
-    return next(new AppError(401, 'UNAUTHORIZED', 'Administrator login required.'));
-  }
-
-  req.adminId = claims.id;
-  return next();
-}
-
-async function requireMember(req, res, next) {
-  try {
-    const claims = bearerClaims(req, 'member');
-    if (!claims) throw new AppError(401, 'TOKEN_EXPIRED', 'Please enter your Member ID again.');
-    const r = await pool.query('SELECT id, member_code, full_name, gender, is_active FROM family_members WHERE id=$1', [claims.id]);
-    if (!r.rows[0] || !r.rows[0].is_active) throw new AppError(401, 'SESSION_EXPIRED', 'Please enter your Member ID again.');
-    req.member = r.rows[0];
-    next();
-  } catch (e) { next(e); }
-}
-// Require the app header on mutations; bearer credentials are sent explicitly in Authorization.
-function requireCustomHeader(req, res, next) {
-  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
-  return req.get('X-Requested-With') === 'family-lottery' ? next() : next(new AppError(403, 'FORBIDDEN', 'Invalid request.'));
-}
-module.exports = { requireAdmin, requireMember, requireCustomHeader };
->>>>>>> 5315d7ee (Migrate authentication to JWT)

@@ -10,10 +10,11 @@ const { requireCustomHeader } = require("./middleware/auth");
 const app = express();
 const prod = process.env.NODE_ENV === "production";
 
-// Trust Render's reverse proxy in production.
-if (prod) {
-  app.set("trust proxy", 1);
-}
+// Configure Render's reverse proxy before registering middleware.
+app.set("trust proxy", prod ? 1 : false);
+
+console.log("Express trust proxy:", app.get("trust proxy"));
+console.log("NODE_ENV:", process.env.NODE_ENV);
 
 // Validate production authentication configuration.
 if (
@@ -51,14 +52,7 @@ app.use(
       return callback(new Error("Origin not allowed by CORS"));
     },
     credentials: true,
-    methods: [
-      "GET",
-      "POST",
-      "PATCH",
-      "PUT",
-      "DELETE",
-      "OPTIONS",
-    ],
+    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: [
       "Content-Type",
       "X-Requested-With",

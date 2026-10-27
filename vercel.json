@@ -1,33 +1,17 @@
-
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "services": {
-    "backend": {
-      "root": "backend",
-      "framework": "express",
-      "entrypoint": "src/app.js",
-      "installCommand": "npm install"
-    },
-    "frontend": {
-      "root": "frontend",
-      "framework": "create-react-app",
-      "installCommand": "npm install",
-      "buildCommand": "node ./node_modules/react-scripts/bin/react-scripts.js build",
-      "outputDirectory": "build"
-    }
-  },
+  "framework": "create-react-app",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "outputDirectory": "build",
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": {
-        "service": "backend"
-      }
+      "source": "/api/:path*",
+      "destination": "https://rutazigurwa-api.onrender.com/api/:path*"
     },
     {
-      "source": "/(.*)",
-      "destination": {
-        "service": "frontend"
-      }
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ]
 }

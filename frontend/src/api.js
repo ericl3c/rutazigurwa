@@ -35,10 +35,7 @@ async function request(method, path, body) {
     );
   }
 
-  if (
-    res.ok &&
-    res.headers.get("content-type")?.includes("text/csv")
-  ) {
+  if (res.ok && res.headers.get("content-type")?.includes("text/csv")) {
     return res.blob();
   }
 

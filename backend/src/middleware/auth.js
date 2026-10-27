@@ -116,4 +116,8 @@ module.exports = {
   requireAdmin,
   requireMember,
   requireCustomHeader,
+<<<<<<< HEAD
 };
+=======
+};
+>>>>>>> 0cc1423f9deffa8dbfba393e563cea45d424fc28

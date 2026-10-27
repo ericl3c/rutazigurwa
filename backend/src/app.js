@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 
 const express = require("express");
@@ -13,19 +12,18 @@ const { requireCustomHeader } = require("./middleware/auth");
 const app = express();
 const prod = process.env.NODE_ENV === "production";
 
-// Render runs behind a reverse proxy.
+// Render and Vercel both sit in front of the API as proxies.
 if (prod) {
-  app.set("trust proxy", 1);
+  app.set("trust proxy", true);
 }
 
-// Validate production configuration.
 if (prod && !process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET is required in production.");
 }
 
-// Allowed frontend URLs.
 const allowedOrigins = [
   process.env.FRONTEND_URL,
+  "https://rutazigurwa-jyry.vercel.app",
   "https://ericl3c-rutazigurwa.vercel.app",
   "https://rutazigurwa-5cpx.vercel.app",
 ]
@@ -37,7 +35,6 @@ app.use(helmet());
 app.use(
   cors({
     origin(origin, callback) {
-      // Allow server-to-server requests and health checks.
       if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
@@ -47,17 +44,12 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type",
-      "X-Requested-With",
-      "Authorization",
-    ],
+    allowedHeaders: ["Content-Type", "X-Requested-With", "Authorization"],
   })
 );
 
 app.use(express.json({ limit: "10kb" }));
 
-// PostgreSQL-backed sessions.
 app.use(
   session({
     name: "sid",
@@ -72,13 +64,12 @@ app.use(
     cookie: {
       httpOnly: true,
       secure: prod,
-      sameSite: prod ? "none" : "lax",
+      sameSite: "lax",
       maxAge: 12 * 60 * 60 * 1000,
     },
   })
 );
 
-// Health check.
 app.get("/health", (req, res) => {
   res.status(200).json({
     ok: true,
@@ -86,7 +77,6 @@ app.get("/health", (req, res) => {
   });
 });
 
-// API routes.
 app.use(
   "/api",
   requireCustomHeader,
@@ -94,7 +84,6 @@ app.use(
   require("./routes/admin")
 );
 
-// 404 handler.
 app.use((req, res) => {
   res.status(404).json({
     error: {
@@ -104,7 +93,6 @@ app.use((req, res) => {
   });
 });
 
-// Central error handler.
 app.use((err, req, res, next) => {
   if (res.headersSent) {
     return next(err);

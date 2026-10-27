@@ -1,17 +1,13 @@
-const cors = require('cors');
 
-const allowedOrigins = [
-  'http://localhost:3000',
-  'https://rutazigurwa-5cpx.vercel.app'
-];
+const app = require('./app');
 
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
+const port = process.env.PORT || 4000;
 
-    return callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true
-}));
+const server = app.listen(port, '0.0.0.0', () => {
+  console.log(`Family Lottery API listening on port ${port}`);
+});
+
+server.on('error', (error) => {
+  console.error('Failed to start Family Lottery API:', error.message);
+  process.exit(1);
+});

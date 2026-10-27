@@ -1,3 +1,4 @@
+
 require("dotenv").config();
 
 const express = require("express");
@@ -9,19 +10,20 @@ const { requireCustomHeader } = require("./middleware/auth");
 const app = express();
 const prod = process.env.NODE_ENV === "production";
 
-// Render and Vercel both sit in front of the API as proxies.
+// Trust the hosting platform's reverse proxy in production.
 if (prod) {
-  app.set("trust proxy", true);
+  app.set("trust proxy", 1);
 }
 
-<<<<<<< HEAD
-if (prod && !process.env.SESSION_SECRET) {
-  throw new Error("SESSION_SECRET is required in production.");
-=======
 // Validate production configuration.
-if (prod && !process.env.AUTH_TOKEN_SECRET && !process.env.SESSION_SECRET) {
-  throw new Error("AUTH_TOKEN_SECRET or SESSION_SECRET is required in production.");
->>>>>>> 5315d7ee (Migrate authentication to JWT)
+if (
+  prod &&
+  !process.env.AUTH_TOKEN_SECRET &&
+  !process.env.SESSION_SECRET
+) {
+  throw new Error(
+    "AUTH_TOKEN_SECRET or SESSION_SECRET is required in production."
+  );
 }
 
 const allowedOrigins = [
@@ -47,36 +49,17 @@ app.use(
     },
     credentials: false,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "X-Requested-With", "Authorization"],
+    allowedHeaders: [
+      "Content-Type",
+      "X-Requested-With",
+      "Authorization",
+    ],
   })
 );
 
 app.use(express.json({ limit: "10kb" }));
 
-<<<<<<< HEAD
-app.use(
-  session({
-    name: "sid",
-    store: new PgStore({
-      pool,
-      tableName: "session",
-      createTableIfMissing: true,
-    }),
-    secret: process.env.SESSION_SECRET || "dev-only-secret",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      secure: prod,
-      sameSite: "lax",
-      maxAge: 12 * 60 * 60 * 1000,
-    },
-  })
-);
-
-=======
 // Health check.
->>>>>>> 5315d7ee (Migrate authentication to JWT)
 app.get("/health", (req, res) => {
   res.status(200).json({
     ok: true,
@@ -84,6 +67,7 @@ app.get("/health", (req, res) => {
   });
 });
 
+// API routes.
 app.use(
   "/api",
   requireCustomHeader,
@@ -91,6 +75,7 @@ app.use(
   require("./routes/admin")
 );
 
+// Handle unknown routes.
 app.use((req, res) => {
   res.status(404).json({
     error: {
@@ -100,6 +85,7 @@ app.use((req, res) => {
   });
 });
 
+// Centralized error handler.
 app.use((err, req, res, next) => {
   if (res.headersSent) {
     return next(err);

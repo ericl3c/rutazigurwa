@@ -3,10 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
-const session = require("express-session");
-const PgStore = require("connect-pg-simple")(session);
 
-const pool = require("./db");
 const { requireCustomHeader } = require("./middleware/auth");
 
 const app = express();
@@ -17,8 +14,14 @@ if (prod) {
   app.set("trust proxy", true);
 }
 
+<<<<<<< HEAD
 if (prod && !process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET is required in production.");
+=======
+// Validate production configuration.
+if (prod && !process.env.AUTH_TOKEN_SECRET && !process.env.SESSION_SECRET) {
+  throw new Error("AUTH_TOKEN_SECRET or SESSION_SECRET is required in production.");
+>>>>>>> 5315d7ee (Migrate authentication to JWT)
 }
 
 const allowedOrigins = [
@@ -42,7 +45,7 @@ app.use(
       console.warn("Blocked CORS origin:", origin);
       return callback(null, false);
     },
-    credentials: true,
+    credentials: false,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "X-Requested-With", "Authorization"],
   })
@@ -50,6 +53,7 @@ app.use(
 
 app.use(express.json({ limit: "10kb" }));
 
+<<<<<<< HEAD
 app.use(
   session({
     name: "sid",
@@ -70,6 +74,9 @@ app.use(
   })
 );
 
+=======
+// Health check.
+>>>>>>> 5315d7ee (Migrate authentication to JWT)
 app.get("/health", (req, res) => {
   res.status(200).json({
     ok: true,

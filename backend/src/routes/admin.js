@@ -5,6 +5,7 @@ const rateLimit = require('express-rate-limit');
 const pool = require('../db');
 const { AppError, wrap } = require('../errors');
 const { requireAdmin } = require('../middleware/auth');
+const { issueToken } = require('../services/authToken');
 
 const loginLimiter = rateLimit({
   skip: () => process.env.NODE_ENV === 'test' && !process.env.TEST_RATE_LIMIT,
@@ -61,53 +62,22 @@ router.post('/admin/login', loginLimiter, wrap(async (req, res) => {
 
   if (!a || !ok) throw bad;
 
-  // Regenerate the session after successful password verification.
-  await new Promise((resolve, reject) => {
-    req.session.regenerate((err) => {
-      if (err) return reject(err);
-      resolve();
-    });
-  });
-
-  // Store the authenticated administrator ID in the new session.
-  req.session.adminId = a.id;
-
-  // Explicitly save the session before returning a successful login.
-  await new Promise((resolve, reject) => {
-    req.session.save((err) => {
-      if (err) return reject(err);
-      resolve();
-    });
-  });
-
   await audit(a.id, 'admin_login', 'admin', a.id);
 
-  res.json({ ok: true });
+  res.json({ ok: true, access_token: issueToken('admin', a.id) });
 }));
-
-// ADMIN LOGOUT
-router.post('/admin/logout', (req, res, next) => {
-  req.session.destroy((err) => {
-    if (err) return next(err);
-
-    res.clearCookie('sid', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
-    });
-
-    res.json({ ok: true });
-  });
-});
 
 // Protect all subsequent /admin routes.
 router.use('/admin', requireAdmin);
+
+// ADMIN LOGOUT
+router.post('/admin/logout', (req, res) => res.json({ ok: true }));
 
 // GET ADMIN ACCOUNT
 router.get('/admin/account', wrap(async (req, res) => {
   const r = await pool.query(
     'SELECT username FROM admins WHERE id=$1',
-    [req.session.adminId]
+    [req.adminId]
   );
 
   if (!r.rows[0]) {
@@ -158,7 +128,7 @@ router.patch('/admin/account', wrap(async (req, res) => {
   const account = (
     await pool.query(
       'SELECT password_hash FROM admins WHERE id=$1',
-      [req.session.adminId]
+      [req.adminId]
     )
   ).rows[0];
 
@@ -180,7 +150,7 @@ router.patch('/admin/account', wrap(async (req, res) => {
   try {
     updated = await pool.query(
       'UPDATE admins SET username=$1, password_hash=$2 WHERE id=$3 RETURNING id, username',
-      [name, passwordHash, req.session.adminId]
+      [name, passwordHash, req.adminId]
     );
   } catch (e) {
     if (e.code === '23505') {
@@ -194,10 +164,10 @@ router.patch('/admin/account', wrap(async (req, res) => {
   }
 
   await audit(
-    req.session.adminId,
+    req.adminId,
     'admin_credentials_updated',
     'admin',
-    req.session.adminId
+    req.adminId
   );
 
   res.json(updated.rows[0]);
@@ -381,7 +351,7 @@ router.post('/admin/members', wrap(async (req, res) => {
   }
 
   await audit(
-    req.session.adminId,
+    req.adminId,
     'member_created',
     'family_member',
     r.rows[0].id
@@ -433,7 +403,7 @@ router.patch('/admin/members/:id(\\d+)/status', wrap(async (req, res) => {
   }
 
   await audit(
-    req.session.adminId,
+    req.adminId,
     req.body.is_active ? 'member_activated' : 'member_deactivated',
     'family_member',
     r.rows[0].id
@@ -470,7 +440,7 @@ router.patch('/admin/members/:id(\\d+)', wrap(async (req, res) => {
   }
 
   await audit(
-    req.session.adminId,
+    req.adminId,
     'member_updated',
     'family_member',
     r.rows[0].id
@@ -707,7 +677,7 @@ router.patch('/admin/settings', wrap(async (req, res) => {
        (admin_id, action, entity_type, entity_id)
        VALUES ($1,$2,$3,$4)`,
       [
-        req.session.adminId,
+        req.adminId,
         `lottery_${action}`,
         'lottery_settings',
         '1'
@@ -792,7 +762,7 @@ router.get('/admin/export', wrap(async (req, res) => {
     .join('\n');
 
   await audit(
-    req.session.adminId,
+    req.adminId,
     `export_${type}`,
     'export',
     null

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 
 const jwt = require('jsonwebtoken');
 const pool = require('../db');
@@ -89,3 +90,41 @@ module.exports = {
   requireAdmin,
   requireMember
 };
+=======
+const { AppError } = require('../errors');
+const pool = require('../db');
+const { verifyToken } = require('../services/authToken');
+
+function bearerClaims(req, role) {
+  const authorization = req.get('Authorization') || '';
+  const match = /^Bearer ([^\s]+)$/.exec(authorization);
+  return match ? verifyToken(match[1], role) : null;
+}
+
+function requireAdmin(req, res, next) {
+  const claims = bearerClaims(req, 'admin');
+  if (!claims) {
+    return next(new AppError(401, 'UNAUTHORIZED', 'Administrator login required.'));
+  }
+
+  req.adminId = claims.id;
+  return next();
+}
+
+async function requireMember(req, res, next) {
+  try {
+    const claims = bearerClaims(req, 'member');
+    if (!claims) throw new AppError(401, 'TOKEN_EXPIRED', 'Please enter your Member ID again.');
+    const r = await pool.query('SELECT id, member_code, full_name, gender, is_active FROM family_members WHERE id=$1', [claims.id]);
+    if (!r.rows[0] || !r.rows[0].is_active) throw new AppError(401, 'SESSION_EXPIRED', 'Please enter your Member ID again.');
+    req.member = r.rows[0];
+    next();
+  } catch (e) { next(e); }
+}
+// Require the app header on mutations; bearer credentials are sent explicitly in Authorization.
+function requireCustomHeader(req, res, next) {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  return req.get('X-Requested-With') === 'family-lottery' ? next() : next(new AppError(403, 'FORBIDDEN', 'Invalid request.'));
+}
+module.exports = { requireAdmin, requireMember, requireCustomHeader };
+>>>>>>> 5315d7ee (Migrate authentication to JWT)

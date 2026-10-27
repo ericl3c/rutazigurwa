@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PartyPopper } from 'lucide-react';
-import { api } from '../api';
+import { api, clearAuthToken } from '../api';
 import { Modal, Alert, Spinner } from '../components';
 
 const STATUS_TEXT = {
@@ -41,7 +41,7 @@ export default function MemberLottery() {
       }
     } finally { setDrawing(false); setWheelSpinning(false); }
   }
-  async function logout() { try { await api.post('/member/logout'); } catch {} nav('/'); }
+  function logout() { clearAuthToken('member'); nav('/'); }
 
   if (!me && !err) return <main className="center-page"><Spinner /></main>;
   if (!me) return <main className="center-page"><div className="card narrow"><Alert>{err}</Alert><button className="btn" onClick={() => nav('/')}>Back</button></div></main>;

@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Users, Dices, ListChecks, ScrollText, LogOut, Menu, UserRoundCog } from 'lucide-react';
-import { api } from '../api';
+import { api, clearAuthToken } from '../api';
 import { Spinner } from '../components';
 
 export default function AdminLayout() {
   const nav = useNavigate(); const [ok, setOk] = useState(false); const [open, setOpen] = useState(false);
   useEffect(() => { api.get('/admin/dashboard').then(() => setOk(true)).catch(() => nav('/admin/login')); }, [nav]);
-  async function logout() { try { await api.post('/admin/logout'); } catch {} nav('/admin/login'); }
+  function logout() { clearAuthToken('admin'); nav('/admin/login'); }
   if (!ok) return <main className="center-page"><Spinner /></main>;
   const L = ({ to, icon: I, children, end }) => <NavLink to={to} end={end} onClick={() => setOpen(false)}><I size={18} />{children}</NavLink>;
   return (

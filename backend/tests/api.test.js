@@ -7,6 +7,17 @@ const pool = require('../src/db');
 const { performDraw } = require('../src/services/draw');
 const H = { 'X-Requested-With': 'family-lottery' };
 
+function bearerAgent(token) {
+  const withToken = (method, path) => request(app)[method](path)
+    .set('Authorization', `Bearer ${token}`);
+
+  return {
+    get: (path) => withToken('get', path),
+    post: (path) => withToken('post', path),
+    patch: (path) => withToken('patch', path),
+  };
+}
+
 async function reset(males = 3, females = 3) {
   await pool.query('TRUNCATE draws, audit_logs, family_members, admins, lottery_settings, sessions RESTART IDENTITY CASCADE');
   await pool.query('ALTER SEQUENCE member_code_seq RESTART 1');
@@ -18,8 +29,14 @@ async function reset(males = 3, females = 3) {
   await pool.query('INSERT INTO admins (username, password_hash) VALUES ($1,$2)', ['boss', await bcrypt.hash('correct-horse-battery', 4)]);
 }
 const setStatus = (s) => pool.query('UPDATE lottery_settings SET status=$1 WHERE id=1', [s]);
-async function memberAgent(code) { const a = request.agent(app); const r = await a.post('/api/member/login').set(H).send({ member_code: code }); return { a, r }; }
-async function adminAgent() { const a = request.agent(app); await a.post('/api/admin/login').set(H).send({ username: 'boss', password: 'correct-horse-battery' }); return a; }
+async function memberAgent(code) {
+  const r = await request(app).post('/api/member/login').set(H).send({ member_code: code });
+  return { a: bearerAgent(r.body.access_token), r };
+}
+async function adminAgent() {
+  const r = await request(app).post('/api/admin/login').set(H).send({ username: 'boss', password: 'correct-horse-battery' });
+  return bearerAgent(r.body.access_token);
+}
 const genderOf = async (name) => (await pool.query('SELECT gender FROM family_members WHERE full_name=$1', [name])).rows[0].gender;
 
 beforeEach(() => reset());
@@ -28,7 +45,13 @@ afterAll(() => pool.end());
 describe('member login', () => {
   test('valid ID logs in and /me shows name', async () => {
     const { a, r } = await memberAgent('FAM-001'); expect(r.status).toBe(200);
+    expect(r.body.access_token).toEqual(expect.any(String));
     const me = await a.get('/api/member/me'); expect(me.body.name).toBe('Man 0'); expect(me.body.has_drawn).toBe(false);
+  });
+  test('member routes require a valid member bearer token', async () => {
+    const { r } = await memberAgent('FAM-001');
+    expect((await request(app).get('/api/member/me').set('Authorization', `Bearer ${r.body.access_token}x`)).status).toBe(401);
+    expect((await request(app).get('/api/member/me').set('Authorization', `Bearer ${r.body.access_token}`)).status).toBe(200);
   });
   test('invalid ID rejected with generic message', async () => {
     const { r } = await memberAgent('FAM-999'); expect(r.status).toBe(401);
@@ -107,6 +130,12 @@ describe('administrator', () => {
   });
   test('wrong password rejected', async () => {
     const r = await request(app).post('/api/admin/login').set(H).send({ username: 'boss', password: 'nope' }); expect(r.status).toBe(401);
+  });
+  test('admin login returns a bearer token for protected routes', async () => {
+    const r = await request(app).post('/api/admin/login').set(H).send({ username: 'boss', password: 'correct-horse-battery' });
+    expect(r.status).toBe(200);
+    expect(r.body.access_token).toEqual(expect.any(String));
+    expect((await request(app).get('/api/admin/dashboard').set('Authorization', `Bearer ${r.body.access_token}`)).status).toBe(200);
   });
   test('creates members with unique server-generated IDs', async () => {
     const a = await adminAgent();

@@ -8,6 +8,25 @@ const HEADERS = {
   "X-Requested-With": "family-lottery",
 };
 
+const TOKEN_KEYS = {
+  admin: "rutazigurwa.adminToken",
+  member: "rutazigurwa.memberToken",
+};
+
+function authScope(path) {
+  if (path.startsWith("/admin/")) return "admin";
+  if (path.startsWith("/member/") || path === "/lottery/draw") return "member";
+  return null;
+}
+
+function isPublicAuthPath(path) {
+  return ["/admin/login", "/member/login", "/member/register"].includes(path);
+}
+
+export function clearAuthToken(scope) {
+  window.sessionStorage.removeItem(TOKEN_KEYS[scope]);
+}
+
 export class ApiError extends Error {
   constructor(status, code, message) {
     super(message);
@@ -19,12 +38,19 @@ export class ApiError extends Error {
 
 async function request(method, path, body) {
   let res;
+  const scope = authScope(path);
+  const token = scope && !isPublicAuthPath(path)
+    ? window.sessionStorage.getItem(TOKEN_KEYS[scope])
+    : null;
 
   try {
     res = await fetch(BASE + "/api" + path, {
       method,
-      headers: { ...HEADERS },
-      credentials: "include",
+      headers: {
+        ...HEADERS,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: "omit",
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (error) {
@@ -42,6 +68,10 @@ async function request(method, path, body) {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
+    if (res.status === 401 && scope) {
+      clearAuthToken(scope);
+    }
+
     throw new ApiError(
       res.status,
       data.error?.code || data.code || "REQUEST_FAILED",
@@ -51,6 +81,18 @@ async function request(method, path, body) {
           ? "Administrator login required. Please log in again."
           : "Something went wrong. Please try again.")
     );
+  }
+
+  if (path === "/admin/login" || path === "/member/login") {
+    const loginScope = path === "/admin/login" ? "admin" : "member";
+    if (typeof data.access_token !== "string" || !data.access_token) {
+      throw new ApiError(500, "AUTH_TOKEN_MISSING", "The server did not return an authentication token.");
+    }
+    window.sessionStorage.setItem(TOKEN_KEYS[loginScope], data.access_token);
+  } else if (path === "/admin/logout") {
+    clearAuthToken("admin");
+  } else if (path === "/member/logout") {
+    clearAuthToken("member");
   }
 
   return data;

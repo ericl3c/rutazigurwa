@@ -2,7 +2,8 @@ const router = require('express').Router();
 const rateLimit = require('express-rate-limit');
 const pool = require('../db');
 const { AppError, wrap } = require('../errors');
-const { requireMember, MEMBER_TTL_MS } = require('../middleware/auth');
+const { requireMember } = require('../middleware/auth');
+const { issueToken } = require('../services/authToken');
 const { performDraw, existingResult } = require('../services/draw');
 
 const loginLimiter = rateLimit({ skip: () => process.env.NODE_ENV === 'test' && !process.env.TEST_RATE_LIMIT, windowMs: 15 * 60 * 1000, limit: 15, standardHeaders: true, legacyHeaders: false,
@@ -41,16 +42,10 @@ router.post('/member/login', loginLimiter, wrap(async (req, res) => {
   if (!CODE_RE.test(code)) throw generic;
   const r = await pool.query('SELECT id, is_active FROM family_members WHERE member_code=$1', [code]);
   if (!r.rows[0] || !r.rows[0].is_active) throw generic;       // same message for unknown and inactive
-  await new Promise((ok, no) => req.session.regenerate((e) => (e ? no(e) : ok())));
-  req.session.memberId = r.rows[0].id;
-  req.session.memberExpires = Date.now() + MEMBER_TTL_MS;
-  res.json({ ok: true });
+  res.json({ ok: true, access_token: issueToken('member', r.rows[0].id) });
 }));
 
-router.post('/member/logout', (req, res, next) => {
-  delete req.session.memberId; delete req.session.memberExpires;
-  req.session.save((e) => (e ? next(e) : res.json({ ok: true })));
-});
+router.post('/member/logout', requireMember, (req, res) => res.json({ ok: true }));
 
 router.get('/member/me', requireMember, wrap(async (req, res) => {
   const state = await getLotteryState();

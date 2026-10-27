@@ -1,7 +1,7 @@
-<<<<<<< HEAD
 
 const jwt = require('jsonwebtoken');
-const pool = require('../db');
+cons
+t pool = require('../db');
 const { AppError } = require('../errors');
 
 function verifyToken(req, res, next) {

@@ -1,4 +1,4 @@
-
+```javascript
 require("dotenv").config();
 
 const express = require("express");
@@ -10,20 +10,12 @@ const { requireCustomHeader } = require("./middleware/auth");
 const app = express();
 const prod = process.env.NODE_ENV === "production";
 
-<<<<<<< HEAD
-// Trust the hosting platform's reverse proxy in production.
-=======
-// Render runs behind a reverse proxy.
->>>>>>> 0cc1423f9deffa8dbfba393e563cea45d424fc28
+// Trust Render's reverse proxy in production.
 if (prod) {
   app.set("trust proxy", 1);
 }
 
-<<<<<<< HEAD
-// Validate production configuration.
-=======
 // Validate production authentication configuration.
->>>>>>> 0cc1423f9deffa8dbfba393e563cea45d424fc28
 if (
   prod &&
   !process.env.AUTH_TOKEN_SECRET &&
@@ -34,6 +26,7 @@ if (
   );
 }
 
+// Allowed frontend origins.
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   "https://rutazigurwa-jyry.vercel.app",
@@ -93,11 +86,7 @@ app.use((req, res) => {
   });
 });
 
-<<<<<<< HEAD
-// Centralized error handler.
-=======
 // Central error handler.
->>>>>>> 0cc1423f9deffa8dbfba393e563cea45d424fc28
 app.use((err, req, res, next) => {
   if (res.headersSent) {
     return next(err);
@@ -132,3 +121,4 @@ app.use((err, req, res, next) => {
 });
 
 module.exports = app;
+```

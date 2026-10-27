@@ -1,4 +1,3 @@
-```javascript
 const BASE = (
   process.env.REACT_APP_API_URL ||
   (process.env.NODE_ENV === "development"
@@ -24,7 +23,7 @@ async function request(method, path, body) {
   let res;
 
   try {
-    res = await fetch(`${BASE}/api${path}`, {
+    res = await fetch(BASE + "/api" + path, {
       method,
       headers: { ...HEADERS },
       credentials: "include",
@@ -76,4 +75,3 @@ export const api = {
 
 export const fmtDate = (date) =>
   date ? new Date(date).toLocaleString() : "";
-```

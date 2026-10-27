@@ -18,11 +18,12 @@ if (prod) {
 // Validate production authentication configuration.
 if (
   prod &&
+  !process.env.JWT_SECRET &&
   !process.env.AUTH_TOKEN_SECRET &&
   !process.env.SESSION_SECRET
 ) {
   throw new Error(
-    "AUTH_TOKEN_SECRET or SESSION_SECRET is required in production."
+    "JWT_SECRET, AUTH_TOKEN_SECRET, or SESSION_SECRET is required in production."
   );
 }
 
@@ -36,7 +37,6 @@ const allowedOrigins = [
   .filter(Boolean)
   .map((url) => url.replace(/\/+$/, ""));
 
-// Security headers.
 app.use(helmet());
 
 // CORS configuration.
@@ -48,10 +48,17 @@ app.use(
       }
 
       console.warn("Blocked CORS origin:", origin);
-      return callback(null, false);
+      return callback(new Error("Origin not allowed by CORS"));
     },
-    credentials: false,
-    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+    methods: [
+      "GET",
+      "POST",
+      "PATCH",
+      "PUT",
+      "DELETE",
+      "OPTIONS",
+    ],
     allowedHeaders: [
       "Content-Type",
       "X-Requested-With",
@@ -60,7 +67,6 @@ app.use(
   })
 );
 
-// Parse JSON request bodies.
 app.use(express.json({ limit: "10kb" }));
 
 // Health check.
@@ -71,7 +77,7 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Member and admin API routes.
+// API routes.
 app.use(
   "/api",
   requireCustomHeader,
@@ -100,6 +106,15 @@ app.use((err, req, res, next) => {
       error: {
         code: "BAD_JSON",
         message: "Invalid JSON request body.",
+      },
+    });
+  }
+
+  if (err.message === "Origin not allowed by CORS") {
+    return res.status(403).json({
+      error: {
+        code: "CORS_BLOCKED",
+        message: "This frontend origin is not allowed.",
       },
     });
   }

@@ -107,6 +107,8 @@ export const api = {
   patch: (path, body) =>
     request("PATCH", path, body === undefined ? {} : body),
 
+  delete: (path) => request("DELETE", path),
+
   blob: (path) => request("GET", path),
 };
 

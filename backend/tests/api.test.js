@@ -15,6 +15,7 @@ function bearerAgent(token) {
     get: (path) => withToken('get', path),
     post: (path) => withToken('post', path),
     patch: (path) => withToken('patch', path),
+    delete: (path) => withToken('delete', path),
   };
 }
 
@@ -127,6 +128,7 @@ describe('administrator', () => {
     for (const p of ['/api/admin/dashboard', '/api/admin/members', '/api/admin/draws', '/api/admin/settings', '/api/admin/export'])
       expect((await request(app).get(p)).status).toBe(401);
     expect((await request(app).post('/api/admin/members').set(H).send({ full_name: 'X', gender: 'male' })).status).toBe(401);
+    expect((await request(app).delete('/api/admin/members/1').set(H)).status).toBe(401);
   });
   test('wrong password rejected', async () => {
     const r = await request(app).post('/api/admin/login').set(H).send({ username: 'boss', password: 'nope' }); expect(r.status).toBe(401);
@@ -170,6 +172,32 @@ describe('administrator', () => {
     const a = await adminAgent(); const m = await memberAgent('FAM-001');
     await a.patch('/api/admin/members/1/status').set(H).send({ is_active: false });
     expect((await m.a.get('/api/member/me')).status).toBe(401);
+  });
+  test('deletes a member and all draws that reference them, and audits the deletion', async () => {
+    await pool.query(
+      `INSERT INTO draws (participant_id, assigned_member_id, matching_mode, round_number)
+       VALUES (1, 2, 'one_to_one', 1), (4, 1, 'one_to_one', 1)`
+    );
+    const a = await adminAgent();
+
+    const response = await a.delete('/api/admin/members/1');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ ok: true });
+    expect((await pool.query('SELECT id FROM family_members WHERE id=1')).rows).toHaveLength(0);
+    expect((await pool.query('SELECT id FROM draws WHERE participant_id=1 OR assigned_member_id=1')).rows).toHaveLength(0);
+    expect((await pool.query('SELECT count(*)::int c FROM draws')).rows[0].c).toBe(0);
+    expect((await pool.query(
+      `SELECT action, entity_type, entity_id FROM audit_logs
+       WHERE action='member_deleted'`
+    )).rows).toEqual([{ action: 'member_deleted', entity_type: 'family_member', entity_id: '1' }]);
+  });
+  test('deleting a missing member returns not found', async () => {
+    const a = await adminAgent();
+    const response = await a.delete('/api/admin/members/999');
+
+    expect(response.status).toBe(404);
+    expect(response.body.error.code).toBe('NOT_FOUND');
   });
 });
 

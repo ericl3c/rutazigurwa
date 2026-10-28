@@ -419,6 +419,44 @@ router.patch('/admin/members/:id(\\d+)/status', wrap(async (req, res) => {
   res.json(r.rows[0]);
 }));
 
+// DELETE FAMILY MEMBER AND LINKED DRAW HISTORY
+router.delete('/admin/members/:id(\\d+)', wrap(async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const member = await client.query(
+      'SELECT id FROM family_members WHERE id=$1 FOR UPDATE',
+      [req.params.id]
+    );
+
+    if (!member.rows[0]) {
+      throw new AppError(404, 'NOT_FOUND', 'Member not found.');
+    }
+
+    await client.query(
+      'DELETE FROM draws WHERE participant_id=$1 OR assigned_member_id=$1',
+      [req.params.id]
+    );
+    await client.query('DELETE FROM family_members WHERE id=$1', [req.params.id]);
+    await client.query(
+      `INSERT INTO audit_logs (admin_id, action, entity_type, entity_id)
+       VALUES ($1,$2,$3,$4)`,
+      [req.adminId, 'member_deleted', 'family_member', String(req.params.id)]
+    );
+
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+
+  res.json({ ok: true });
+}));
+
 // UPDATE FAMILY MEMBER
 router.patch('/admin/members/:id(\\d+)', wrap(async (req, res) => {
   const m = validateMember(req.body || {}, true);

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Plus, Copy, Pencil, Power, Download } from 'lucide-react';
+import { Plus, Copy, Pencil, Power, Download, Trash2 } from 'lucide-react';
 import { api, fmtDate } from '../api';
 import { Modal, Alert, Spinner } from '../components';
 import { fetchAllPages } from '../utils/fetchAllPages';
@@ -11,6 +11,7 @@ export default function Members() {
   const [q, setQ] = useState(''); const [gender, setGender] = useState(''); const [active, setActive] = useState(''); const [drawn, setDrawn] = useState('');
   const [form, setForm] = useState(null); const [created, setCreated] = useState(null); const [err, setErr] = useState(''); const [fe, setFe] = useState(''); const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(null);
   const limit = 15;
 
   const load = useCallback(async () => {
@@ -30,6 +31,15 @@ export default function Members() {
   async function toggle(m) {
     if (m.is_active && !window.confirm(`Deactivate ${m.full_name}? They will not be able to log in or be drawn.`)) return;
     try { await api.patch(`/admin/members/${m.id}/status`, { is_active: !m.is_active }); load(); } catch (e) { setErr(e.message); }
+  }
+  async function remove(m) {
+    if (!window.confirm(`Permanently delete ${m.full_name} (${m.member_code})? This also deletes all lottery draw history linked to this member. This cannot be undone.`)) return;
+    setDeleting(m.id); setErr('');
+    try {
+      await api.delete(`/admin/members/${m.id}`);
+      if (rows.length === 1 && page > 1) setPage(page - 1);
+      else load();
+    } catch (e) { setErr(e.message); } finally { setDeleting(null); }
   }
   async function downloadPdf() {
     setExporting(true); setErr('');
@@ -82,6 +92,7 @@ export default function Members() {
                 <button className="icon-btn" title="Copy ID" onClick={() => copy(m.member_code)}><Copy size={16} /></button>
                 <button className="icon-btn" title="Edit" onClick={() => { setFe(''); setForm({ ...m, phone_number: m.phone_number || '' }); }}><Pencil size={16} /></button>
                 <button className="icon-btn" title={m.is_active ? 'Deactivate' : 'Activate'} onClick={() => toggle(m)}><Power size={16} /></button>
+                <button className="icon-btn" title="Delete member and draw history" onClick={() => remove(m)} disabled={deleting !== null}><Trash2 size={16} /></button>
               </td>
             </tr>))}
             {rows.length === 0 && <tr><td colSpan="8" className="muted">No members found.</td></tr>}

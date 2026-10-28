@@ -93,11 +93,11 @@ export default function Members() {
       {form && (
         <Modal title={form.id ? 'Edit member' : 'Add member'} onClose={() => setForm(null)}
           actions={<><button className="btn" onClick={() => setForm(null)}>Cancel</button><button className="btn primary" onClick={save}>Save</button></>}>
-          <label>Full name</label><input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} maxLength={100} />
+          <label>Full name</label><input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} maxLength={100} Required/>
           <label>Gender</label>
           <select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}><option value="male">Male</option><option value="female">Female</option></select>
           {form.has_drawn && <p className="muted">Changing gender will also change how this member is shown in previous results.</p>}
-          <label>Phone number (optional)</label><input value={form.phone_number} onChange={(e) => setForm({ ...form, phone_number: e.target.value })} inputMode="tel" />
+          <label>Phone number (optional)</label><input value={form.phone_number} onChange={(e) => setForm({ ...form, phone_number: e.target.value })} inputMode="tel" Required/>
           <Alert>{fe}</Alert>
         </Modal>
       )}

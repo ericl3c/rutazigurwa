@@ -105,9 +105,7 @@ export default function MemberRegister() {
               <option value="female">Female</option>
             </select>
 
-            <label htmlFor="phone-number">
-              Phone number (optional)
-            </label>
+            <label htmlFor="phone-number">Phone number</label>
             <input
               id="phone-number"
               type="tel"
@@ -117,6 +115,7 @@ export default function MemberRegister() {
               autoComplete="tel"
               maxLength={15}
               placeholder="e.g. 0781234567"
+              required
             />
 
             <Alert>{err}</Alert>

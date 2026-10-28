@@ -39,7 +39,7 @@ export default function MemberRegister() {
               <option value="male">Male</option><option value="female">Female</option>
             </select>
             <label htmlFor="phone-number">Phone number (optional)</label>
-            <input id="phone-number" value={form.phone_number} onChange={(e) => setForm({ ...form, phone_number: e.target.value })} inputMode="tel" autoComplete="tel" />
+            <input id="phone-number" value={form.phone_number} onChange={(e) => setForm({ ...form, phone_number: e.target.value })} inputMode="tel" autoComplete="tel" required/>
             <Alert>{err}</Alert>
             <button className="btn primary block" disabled={busy}>{busy ? 'Creating account...' : 'Create member account'}</button>
             <p className="muted">Already registered? <Link to="/">Sign in</Link></p>

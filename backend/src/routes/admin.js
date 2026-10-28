@@ -179,29 +179,36 @@ router.get('/admin/dashboard', wrap(async (req, res) => {
     SELECT
       (SELECT count(*) FROM family_members)::int AS total_members,
       (SELECT count(*) FROM family_members
-        WHERE is_active AND gender='male')::int AS active_male,
+        WHERE is_active AND gender = 'male')::int AS active_male,
       (SELECT count(*) FROM family_members
-        WHERE is_active AND gender='female')::int AS active_female,
+        WHERE is_active AND gender = 'female')::int AS active_female,
       (SELECT count(*) FROM draws d
-        WHERE d.round_number=(
-          SELECT round_number FROM lottery_settings WHERE id=1
+        WHERE d.round_number = (
+          SELECT round_number FROM lottery_settings WHERE id = 1
         ))::int AS drawn,
       (SELECT count(*) FROM family_members m
         WHERE m.is_active AND NOT EXISTS (
           SELECT 1 FROM draws d
-          WHERE d.participant_id=m.id
-          AND d.round_number=(
-            SELECT round_number FROM lottery_settings WHERE id=1
+          WHERE d.participant_id = m.id
+          AND d.round_number = (
+            SELECT round_number FROM lottery_settings WHERE id = 1
           )
         ))::int AS not_drawn,
       COALESCE(
-        (SELECT status FROM lottery_settings WHERE id=1),
+        (SELECT status FROM lottery_settings WHERE id = 1),
         'not_started'
       ) AS lottery_status,
       COALESCE(
-        (SELECT round_number FROM lottery_settings WHERE id=1),
+        (SELECT round_number FROM lottery_settings WHERE id = 1),
         1
       ) AS round_number
+  `);
+
+  // Get family members in ascending order
+  const members = await pool.query(`
+    SELECT id, full_name, gender, phone_number, is_active
+    FROM family_members
+    ORDER BY full_name ASC;
   `);
 
   res.json({
